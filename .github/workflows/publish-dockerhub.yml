@@ -30,7 +30,7 @@ jobs:
 
       - name: Extract branch name
         shell: bash
-        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF##*/}}" >> $GITHUB_OUTPUT
         id: extract_branch
 
       - name: Get Git Hashes
@@ -45,9 +45,12 @@ jobs:
           if [ "${{ steps.extract_branch.outputs.branch }}" == "develop" ]; then
             TAGS="$TAGS,${{ steps.git_hashes.outputs.short_hash }},${{ steps.git_hashes.outputs.long_hash }}"
           fi
-          ./gradlew --no-daemon --console=plain :fineract-provider:jib -x test -x cucumber \
-            -Djib.to.auth.username=${{secrets.DOCKERHUB_USER}} \
-            -Djib.to.auth.password=${{secrets.DOCKERHUB_TOKEN}} \
-            -Djib.from.platforms=linux/amd64,linux/arm64 \
-            -Djib.to.image=apache/fineract \
-            -Djib.to.tags=$TAGS
+          ./gradlew --no-daemon --console=plain -x test -x cucumber :fineract-provider:bootJar
+          docker build -t apache/fineract:$TAGS .
+          docker save -o fineract-image.tar apache/fineract:$TAGS
+          
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fineract-image
+          path: fineract-image.tar
